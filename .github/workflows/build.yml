@@ -1,0 +1,72 @@
+name: iOS Device Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ios-device:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install JS deps
+        run: npm install
+
+      - name: Build web
+        run: npm run build
+
+      - name: Capacitor sync
+        run: npx cap sync ios
+
+      - name: Build iOS (iphoneos, unsigned, all flags)
+        run: |
+          cd ios/App
+
+          xcodebuild \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_CODE_SIGN_FLAGS="--deep" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_RESOURCE_RULES_PATH="" \
+            ENABLE_BITCODE=NO \
+            VALID_ARCHS="arm64" \
+            SUPPORTED_PLATFORMS="iphoneos" \
+            ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=YES \
+            LD_RUNPATH_SEARCH_PATHS="@executable_path/Frameworks" \
+            GCC_PREPROCESSOR_DEFINITIONS="CODE_SIGNING_ALLOWED=NO" \
+            CLANG_ENABLE_OBJC_ARC=YES
+
+      - name: Package .app
+        run: |
+          mkdir -p payload/Payload
+          cp -R ios/App/build/Build/Products/Debug-iphoneos/*.app payload/Payload/
+
+      - name: Zip into IPA
+        run: |
+          cd payload
+          zip -r HydrationBuddy.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-ipa
+          path: payload/HydrationBuddy.ipa
